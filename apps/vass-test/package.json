@@ -1,0 +1,15 @@
+{
+	"name": "vass_test",
+	"version": "1.0.0",
+	"description": "VASS Example",
+	"main": "index.js",
+	"author": "VASS",
+	"license": "ISC",
+	"alexa": {
+		"applicationId": " amzn1.ask.skill.a74cc915-78ad-47b7-bf9f-05b07f44803e"
+	},
+	"dependencies": {
+		"alexa-app": "^4.2.1",
+		"fast-levenshtein": "^2.0.6"
+	}
+}
