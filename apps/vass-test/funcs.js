@@ -5,11 +5,18 @@ var request = require('request');
  * Private constants
  */
 const session_order = 'order';
-var menu = [];
-var userId = 'alexa_client';
-var itemCode = '3965240';
-var securityCode = '123';
-var token, cartId, code, addresses, deliveryModeId, paymentDetailsId;
+const menu = [];
+const restEndpoint = 'https://188.79.1.60:9002/rest/v2';
+const authEndpoint = 'https://188.79.1.60:9002/authorizationserver/oauth/token';
+const searchQuery = ':BASIC:category:597';
+const userId = 'alexa_client';
+const securityCode = '123';
+const oauthUser = 'ALEXA_APP';
+const oauthPsw = 'ALEXA_APP';
+const clientUser = 'ALEXA_CLIENT';
+const clientPsw = 'ALEXA_CLIENT';
+
+const token, cartId, code, addresses, deliveryModeId, paymentDetailsId;
 
 /**
  * Class that contains all the alexa events
@@ -32,17 +39,19 @@ class AlexaFuncs {
 
 		// Create new cart
 		request({
-			url: 'https://188.79.1.60:9002/rest/v2/electronics/users/' + userId + '/carts',
+			url: restEndpoint + '/electronics/users/' + userId + '/carts',
 			method: 'POST',
 			headers: {
 				'Accept': 'application/json',
 				'Authorization': 'Bearer ' + token
 			}
 		}, function (err, res) {
-			var json = JSON.parse(res.body);
-			cartId = json.code;
-			console.log("Cart Id (code): ", cartId);
-
+			if (err) {
+				console.log('Error req new cart', err);
+			} else {
+				var json = JSON.parse(res.body);
+				cartId = json.code;
+			}
 		});
 		res.say('You have started a new order, what would you like to add?');
 		AlexaFuncs._initOrder(req);
@@ -75,7 +84,7 @@ class AlexaFuncs {
 			});
 
 			const sortedScores = scores.sort(AlexaFuncs.sortfunc);
-			console.log(sortedScores);
+			//console.log(sortedScores);
 
 			const orderItem = { item: sortedScores[0][0].code, quantity: quantity, accepted: false };
 			AlexaFuncs._pushToOrder(req, orderItem);
@@ -189,9 +198,9 @@ class AlexaFuncs {
 				order[order.length - 1].accepted = true;
 				AlexaFuncs._saveOrder(req, order);
 				res.say('Item added.');
-				// TODO: Aquí debería añadir el item elegido y no el item con codigo "hardcoded"
+
 				request({
-					url: 'https://188.79.1.60:9002/rest/v2/electronics/users/' + userId + '/carts/' + cartId + '/entries',
+					url: restEndpoint + '/electronics/users/' + userId + '/carts/' + cartId + '/entries',
 					method: 'POST',
 					headers: {
 						'Accept': 'application/json',
@@ -202,8 +211,12 @@ class AlexaFuncs {
 						'code': order[order.length - 1].item
 					}
 				}, function (err, res) {
-					var json = JSON.parse(res.body);
-					console.log("Item added to Hybris cart:", json);
+					if (err) {
+						console.log('Error req add to cart', err);
+					} else {
+						var json = JSON.parse(res.body);
+						//console.log("Item added to Hybris cart:", json);
+					}
 				});
 
 			}
@@ -279,62 +292,74 @@ class AlexaFuncs {
 	// Get token
 	static _getToken() {
 		request({
-			url: 'https://188.79.1.60:9002/authorizationserver/oauth/token',
+			url: authEndpoint,
 			method: 'POST',
 			form: {
-				'client_id': 'ALEXA_CLIENT',
-				'client_secret': 'ALEXA_CLIENT',
-				'username': 'ALEXA_APP',
-				'password': 'ALEXA_APP',
+				'client_id': clientUser,
+				'client_secret': clientPsw,
+				'username': oauthUser,
+				'password': oauthPsw,
 				'grant_type': 'client_credentials'
 			}
 		}, function (err, res) {
-			var json = JSON.parse(res.body);
-			token = json.access_token;
-			console.log("Access Token:", token);
+			if (err) {
+				console.log('Error req token', err);
+			} else {
+				var json = JSON.parse(res.body);
+				token = json.access_token;
+				//console.log("Access Token:", token);
+			}
 		});
 	}
 
 	// Get Products
 	static _getProducts() {
 		request({
-			url: 'https://188.79.1.60:9002/rest/v2/electronics/products/search?query=:BASIC:category:597&pageSize=10&fields=products(code,name,price),pagination',
+			url: restEndpoint + '/electronics/products/search?query=' + searchQuery + '&pageSize=10&fields=products(code,name,price),pagination',
 			method: 'GET',
 			headers: {
 				'Content-Type': 'application/json'
 			}
 		}, function (err, res) {
-			var json = JSON.parse(res.body);
-			json.products.forEach((el) => {
-				var product = {};
-				product.code = el.code;
-				product.name = el.name;
-				menu.push(product);
-			});
-			console.log("Menu:", menu);
+			if (err) {
+				console.log('Error search products', err);
+			} else {
+				var json = JSON.parse(res.body);
+				json.products.forEach((el) => {
+					var product = {};
+					product.code = el.code;
+					product.name = el.name;
+					menu.push(product);
+				});
+				//console.log("Menu:", menu);
+			}			
 		});
 	}
 
 	// Get user addresses
 	static _getUserAddresses() {
 		request({
-			url: 'https://188.79.1.60:9002/rest/v2/electronics/users/' + userId + '/addresses',
+			url: restEndpoint + '/electronics/users/' + userId + '/addresses',
 			method: 'GET',
 			headers: {
 				'Accept': 'application/json',
 				'Authorization': 'Bearer ' + token,
 			}
 		}, function (err, res) {
-			var json = JSON.parse(res.body);
-			console.log("Addresses:", json); // TODO: recoger addressId
-			AlexaFuncs._setCartUserAddresses();
+			if (err) {
+				console.log('Error get user addresses', err);
+			} else {
+				var json = JSON.parse(res.body);
+				//console.log("Addresses:", json);
+				AlexaFuncs._setCartUserAddresses();
+			}			
 		});
 	}
 
 	// Definir addresses al cart
 	static _setCartUserAddresses() {
 		request({
-			url: 'https://188.79.1.60:9002/rest/v2/electronics/users/' + userId + '/carts/' + cartId + '/addresses/delivery',
+			url: restEndpoint + '/electronics/users/' + userId + '/carts/' + cartId + '/addresses/delivery',
 			method: 'PUT',
 			headers: {
 				'Accept': 'application/json',
@@ -345,7 +370,9 @@ class AlexaFuncs {
 				'addressId': '8796125822999', // TODO: poner address de _getUserAddresses
 			}
 		}, function (err, res) {
-			if (!err) {
+			if (err) {
+				console.log('Error set cart user addresses', err);
+			} else {
 				AlexaFuncs._getCartDeliveryModes();
 			}
 		});
@@ -354,23 +381,27 @@ class AlexaFuncs {
 	// Get user delivery modes
 	static _getCartDeliveryModes() {
 		request({
-			url: 'https://188.79.1.60:9002/rest/v2/electronics/users/' + userId + '/carts/' + cartId + '/deliverymodes',
+			url: restEndpoint + '/electronics/users/' + userId + '/carts/' + cartId + '/deliverymodes',
 			method: 'GET',
 			headers: {
 				'Accept': 'application/json',
 				'Authorization': 'Bearer ' + token
 			}
 		}, function (err, res) {
-			var json = JSON.parse(res.body);
-			console.log("Delivery modes:", json);
-			AlexaFuncs._setCartDeliveryMode();
+			if (err) {
+				console.log('Error get cart delivery mode', err);
+			} else {
+				var json = JSON.parse(res.body);
+				//console.log("Delivery modes:", json);
+				AlexaFuncs._setCartDeliveryMode();
+			}
 		});
 	}
 
 	// Definir user delivery mode al cart
 	static _setCartDeliveryMode() {
 		request({
-			url: 'https://188.79.1.60:9002/rest/v2/electronics/users/' + userId + '/carts/' + cartId + '/deliverymode',
+			url: restEndpoint + '/electronics/users/' + userId + '/carts/' + cartId + '/deliverymode',
 			method: 'PUT',
 			headers: {
 				'Accept': 'application/json',
@@ -381,7 +412,9 @@ class AlexaFuncs {
 				'deliveryModeId': 'standard-gross', // TODO: poner deliveryModeId de _getCartDeliveryModes
 			}
 		}, function (err, res) {
-			if (!err) {
+			if (err) {
+				console.log('Error set cart delivery mode', err);
+			} else {
 				AlexaFuncs._getUserPaymentMethods();
 			}
 		});
@@ -390,23 +423,27 @@ class AlexaFuncs {
 	// Get user payment methods
 	static _getUserPaymentMethods() {
 		request({
-			url: 'https://188.79.1.60:9002/rest/v2/electronics/users/' + userId + '/carts/paymentdetails?saved=false',
+			url: restEndpoint + '/electronics/users/' + userId + '/carts/paymentdetails?saved=false',
 			method: 'GET',
 			headers: {
 				'Accept': 'application/json',
 				'Authorization': 'Bearer ' + token
 			}
 		}, function (err, res) {
-			var json = JSON.parse(res.body);
-			console.log("Payment Methods:", json);
-			AlexaFuncs._setCartPaymentMethods();
+			if (err) {
+				console.log('Error get ser payment methods', err);
+			} else {
+				var json = JSON.parse(res.body);
+				//console.log("Payment Methods:", json);
+				AlexaFuncs._setCartPaymentMethods();
+			}
 		});
 	}
 
 	// Definir payment methods al cart
 	static _setCartPaymentMethods() {
 		request({
-			url: 'https://188.79.1.60:9002/rest/v2/electronics/users/' + userId + '/carts/' + cartId + '/paymentdetails',
+			url: restEndpoint + '/electronics/users/' + userId + '/carts/' + cartId + '/paymentdetails',
 			method: 'PUT',
 			headers: {
 				'Accept': 'application/json',
@@ -417,7 +454,9 @@ class AlexaFuncs {
 				'paymentDetailsId': '8796093186090', // TODO: poner paymentDetailsId de _getCartDeliveryModes
 			}
 		}, function (err, res) {
-			if (!err) {
+			if (err) {
+				console.log('Error set cart payment method', err);
+			} else {
 				AlexaFuncs._cartCheckout();
 			}
 		});
@@ -426,7 +465,7 @@ class AlexaFuncs {
 	// Checkout cart
 	static _cartCheckout() {
 		request({
-			url: 'https://188.79.1.60:9002/rest/v2/electronics/users/' + userId + '/orders',
+			url: restEndpoint + '/electronics/users/' + userId + '/orders',
 			method: 'POST',
 			headers: {
 				'Accept': 'application/json',
@@ -438,23 +477,29 @@ class AlexaFuncs {
 				'securityCode': securityCode // TODO: quitar securityCode hardcoded
 			}
 		}, function (err, res) {
-			var json = JSON.parse(res.body);
-			console.log("Checkout:", json);
+			if (err) {
+				console.log('Error checkout cart', err);
+			} else {
+				var json = JSON.parse(res.body);
+				//console.log("Checkout:", json);
+			}		
 		});
 	}
 
 	// Cancell cart
 	static _cancelCart() {
 		request({
-			url: 'https://188.79.1.60:9002/rest/v2/electronics/users/' + userId + '/carts/' + cartId,
+			url: restEndpoint + '/electronics/users/' + userId + '/carts/' + cartId,
 			method: 'DELETE',
 			headers: {
 				'Accept': 'application/json',
 				'Authorization': 'Bearer ' + token
 			}
 		}, function (err, res) {
-			if (!err) {
-				console.log("Cart Cancelled");
+			if (err) {
+				console.log('Error cancel cart', err);
+			} else {
+				//console.log("Cart Cancelled");
 			}
 		});
 	}
